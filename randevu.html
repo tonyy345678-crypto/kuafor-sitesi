@@ -1,0 +1,130 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Randevu Al | Yusuf Kurt Hair Studio</title>
+<style>
+:root{--bg:#121212;--card:#1d1d1d;--line:#2e2e2e;--gold:#c9a45c;--tx:#f2efe9;--mut:#9a958c}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.4 system-ui,-apple-system,sans-serif}
+main{max-width:480px;margin:auto;padding:22px 16px 48px}
+h1{font-size:21px;margin:0 0 4px;letter-spacing:.5px}
+h2{font-size:12px;color:var(--gold);text-transform:uppercase;letter-spacing:1.2px;margin:26px 0 10px}
+.mut,.sub{color:var(--mut);font-size:14px;margin:0}
+.grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.opt{background:var(--card);border:1px solid var(--line);color:var(--tx);border-radius:10px;padding:12px;text-align:left;font:inherit;cursor:pointer}
+.opt b{display:block}.opt small{color:var(--mut)}
+.opt.on{border-color:var(--gold);background:#2a2418}
+.days{display:flex;gap:8px;overflow-x:auto;padding-bottom:6px}
+.days .opt{min-width:62px;text-align:center;flex:none}
+.times{display:grid;grid-template-columns:repeat(4,1fr);gap:8px}
+.times .opt{text-align:center;padding:10px 0}
+.times p{grid-column:1/-1;margin:0}
+input{width:100%;padding:13px;margin-bottom:8px;background:var(--card);border:1px solid var(--line);border-radius:10px;color:var(--tx);font:inherit}
+.go{width:100%;padding:15px;border:0;border-radius:10px;background:var(--gold);color:#111;font:600 16px system-ui;cursor:pointer;margin-top:6px}
+.go:disabled{opacity:.35;cursor:default}
+.msg{color:#e57373;font-size:14px;min-height:20px;margin:6px 0 0}
+a{color:var(--gold)}
+</style>
+</head>
+<body>
+<main>
+  <h1>YUSUF KURT HAİR STUDİO</h1>
+  <p class="sub">Online randevu</p>
+
+  <h2>1 · Hizmet</h2>
+  <div id="svc" class="grid"></div>
+
+  <h2>2 · Berber</h2>
+  <div id="bar" class="grid"></div>
+
+  <h2>3 · Gün</h2>
+  <div id="days" class="days"></div>
+
+  <h2>4 · Saat</h2>
+  <div id="times" class="times"><p class="mut">Önce hizmet ve gün seçin.</p></div>
+
+  <h2>5 · Bilgileriniz</h2>
+  <input id="name" placeholder="Ad Soyad" autocomplete="name">
+  <input id="phone" placeholder="Telefon (05xx xxx xx xx)" type="tel" autocomplete="tel">
+  <button id="go" class="go" disabled>Randevuyu Onayla</button>
+  <p id="err" class="msg"></p>
+</main>
+
+<script>
+const $ = (s) => document.querySelector(s);
+const st = { svc: null, barber: "any", date: null, time: null };
+const DAYS = ["Paz", "Pzt", "Sal", "Çar", "Per", "Cum", "Cmt"];
+const MON = ["Oca", "Şub", "Mar", "Nis", "May", "Haz", "Tem", "Ağu", "Eyl", "Eki", "Kas", "Ara"];
+const ymd = (d) => d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+
+async function api(u, o) {
+  const r = await fetch(u, o);
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || "Bir hata oluştu, tekrar deneyin.");
+  return j;
+}
+function choose(box, btn) {
+  box.querySelectorAll(".opt").forEach((b) => b.classList.remove("on"));
+  btn.classList.add("on");
+}
+function check() {
+  $("#go").disabled = !(st.svc && st.date && st.time && $("#name").value.trim().length > 1 && $("#phone").value.replace(/\D/g, "").length >= 10);
+}
+async function times() {
+  st.time = null; check();
+  const t = $("#times");
+  if (!st.svc || !st.date) { t.innerHTML = '<p class="mut">Önce hizmet ve gün seçin.</p>'; return; }
+  t.innerHTML = '<p class="mut">Yükleniyor…</p>';
+  try {
+    const { slots } = await api(`/api/slots?date=${st.date}&service=${st.svc}&barber=${st.barber}`);
+    t.innerHTML = slots.length
+      ? slots.map((s) => `<button class="opt" data-t="${s}">${s}</button>`).join("")
+      : '<p class="mut">Bu gün için uygun saat kalmadı, başka gün seçin.</p>';
+  } catch (e) { t.innerHTML = `<p class="msg">${e.message}</p>`; }
+}
+function bind(id, key, attr, after) {
+  $(id).onclick = (e) => {
+    const b = e.target.closest(".opt"); if (!b) return;
+    st[key] = b.dataset[attr]; choose($(id), b); after();
+  };
+}
+async function book() {
+  const g = $("#go"); g.disabled = true; $("#err").textContent = "";
+  try {
+    const r = await api("/api/book", {
+      method: "POST", headers: { "content-type": "application/json" },
+      body: JSON.stringify({ date: st.date, time: st.time, service: st.svc, barber: st.barber, name: $("#name").value, phone: $("#phone").value }),
+    });
+    const [y, m, d] = st.date.split("-");
+    document.querySelector("main").innerHTML =
+      `<h1>Randevunuz alındı ✓</h1><p class="sub">${r.service} · ${r.fiyat} TL · ${r.barber}</p>
+       <h2>${+d} ${MON[+m - 1]} ${y} · ${st.time}</h2>
+       <p>YUSUF KURT HAİR STUDİO<br>Piri Reis Caddesi No 24/A</p>
+       <p class="mut">Değişiklik veya iptal için arayın: <a href="tel:05305404973">0530 540 49 73</a></p>`;
+  } catch (e) { $("#err").textContent = e.message; times(); }
+}
+(async function init() {
+  const c = await api("/api/config");
+  $("#svc").innerHTML = Object.entries(c.services).map(([k, s]) =>
+    `<button class="opt" data-k="${k}"><b>${s.ad}</b><small>${s.fiyat.toLocaleString("tr-TR")} TL</small></button>`).join("");
+  $("#bar").innerHTML = [["any", "Fark etmez"], ...Object.entries(c.barbers)].map(([k, n], i) =>
+    `<button class="opt${i ? "" : " on"}" data-b="${k}"><b>${n}</b></button>`).join("");
+  const days = [];
+  for (let i = 0; i <= c.maxDays; i++) {
+    const d = new Date(); d.setDate(d.getDate() + i);
+    if (!c.closedDays.includes(d.getDay())) days.push(d);
+  }
+  $("#days").innerHTML = days.map((d) =>
+    `<button class="opt" data-d="${ymd(d)}"><small>${DAYS[d.getDay()]}</small><b>${d.getDate()}</b><small>${MON[d.getMonth()]}</small></button>`).join("");
+  bind("#svc", "svc", "k", times);
+  bind("#bar", "barber", "b", times);
+  bind("#days", "date", "d", times);
+  bind("#times", "time", "t", check);
+  $("#name").oninput = $("#phone").oninput = check;
+  $("#go").onclick = book;
+})().catch((e) => { $("#err").textContent = e.message; });
+</script>
+</body>
+</html>
